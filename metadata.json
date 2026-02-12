@@ -1,0 +1,5 @@
+{
+  "name": "SiteScout AI",
+  "description": "An intelligent web scraper and chat interface that allows users to extract content from any URL and query specific information using Cerebras Inference (Llama 3.3).",
+  "requestFramePermissions": []
+}
