@@ -25,9 +25,7 @@ const UrlInput: React.FC<UrlInputProps> = ({ onUrlSubmit, isLoading, error }) =>
 
   const handleUrlSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (inputUrl.trim()) {
-      onUrlSubmit(inputUrl);
-    }
+    if (inputUrl.trim()) onUrlSubmit(inputUrl);
   };
 
   const handleTopicSearch = async (e: React.FormEvent) => {
@@ -37,26 +35,22 @@ const UrlInput: React.FC<UrlInputProps> = ({ onUrlSubmit, isLoading, error }) =>
     setIsSearchingTopic(true);
     setSearchError(null);
     setSearchResults(null);
-    setLoadingStatus('Searching for websites...');
+    setLoadingStatus('Curating sources...');
 
     try {
-      // 1. Get raw candidates from AI
       const rawResults = await aiService.searchWebsites(topic);
-      
       if (rawResults.length === 0) {
-        setSearchError("No relevant websites found. Try a different topic.");
+        setSearchError("No relevant journals or sites found. Try a different topic.");
         setIsSearchingTopic(false);
         return;
       }
 
-      setLoadingStatus('Verifying access to content...');
-
-      // 2. Deduplicate URLs
+      setLoadingStatus('Verifying access...');
+      
       const uniqueResults: SearchResultItem[] = [];
       const seenUrls = new Set<string>();
 
       for (const item of rawResults) {
-        // Simple normalization: lower case and remove trailing slash
         const normalized = item.url.trim().toLowerCase().replace(/\/$/, '');
         if (!seenUrls.has(normalized)) {
           seenUrls.add(normalized);
@@ -64,8 +58,6 @@ const UrlInput: React.FC<UrlInputProps> = ({ onUrlSubmit, isLoading, error }) =>
         }
       }
 
-      // 3. Verify Scrapability (in parallel)
-      // We map the check to the item or null, then filter out nulls
       const verificationPromises = uniqueResults.map(async (item) => {
         const isAccessible = await checkScrapability(item.url);
         return isAccessible ? item : null;
@@ -75,15 +67,13 @@ const UrlInput: React.FC<UrlInputProps> = ({ onUrlSubmit, isLoading, error }) =>
         .filter((item): item is SearchResultItem => item !== null);
 
       if (verifiedResults.length === 0) {
-        setSearchError("Found websites matching your topic, but was unable to automatically access their content (they may be protected or require login). Please try a more general topic.");
+        setSearchError("Found sources, but they are protected. Try a more general inquiry.");
       } else {
         setSearchResults(verifiedResults);
       }
 
     } catch (err: any) {
-      console.error(err);
-      // Display the actual error message from the service (e.g. Auth failed)
-      setSearchError(err.message || "Failed to search for websites. Please try again.");
+      setSearchError(err.message || "Search unavailable at the moment.");
     } finally {
       setIsSearchingTopic(false);
       setLoadingStatus('');
@@ -97,188 +87,170 @@ const UrlInput: React.FC<UrlInputProps> = ({ onUrlSubmit, isLoading, error }) =>
   };
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6 animate-in fade-in zoom-in duration-500">
-      <div className="text-center mb-10">
-        <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-indigo-600 mb-4 pb-1">
-          SiteScout AI
+    <div className="w-full max-w-4xl mx-auto animate-fade-up">
+      <div className="text-center mb-12">
+        <div className="inline-block mb-4 px-4 py-1.5 rounded-full bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 text-xs font-semibold tracking-wider uppercase">
+          AI Knowledge Companion
+        </div>
+        <h1 className="text-5xl md:text-7xl font-serif font-medium text-slate-900 dark:text-white mb-6 tracking-tight">
+          Site<span className="italic text-primary-600 dark:text-primary-400">Scout</span>
         </h1>
-        <p className="text-slate-500 text-lg">
-          Chat with any website. Extract knowledge instantly.
+        <p className="text-slate-600 dark:text-slate-400 text-lg md:text-xl font-light max-w-2xl mx-auto leading-relaxed">
+          Transform any website into an intelligent conversation. <br className="hidden md:block"/>
+          Curate, extract, and understand content instantly.
         </p>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-xl overflow-hidden border border-slate-100">
-        <div className="flex border-b border-slate-100">
+      <div className="bg-white/70 dark:bg-charcoal/70 backdrop-blur-xl rounded-[2rem] shadow-2xl dark:shadow-black/50 border border-white/20 dark:border-white/5 overflow-hidden transition-colors duration-300">
+        
+        {/* Toggle Switch */}
+        <div className="flex p-2 gap-2 bg-slate-100/50 dark:bg-black/20 mx-6 mt-6 rounded-2xl">
           <button
             onClick={() => setActiveTab('url')}
-            className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+            className={`flex-1 py-3 text-sm font-medium rounded-xl flex items-center justify-center gap-2 transition-all duration-300 ${
               activeTab === 'url'
-                ? 'bg-brand-50 text-brand-600 border-b-2 border-brand-600'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
-            <Globe size={18} />
-            Direct URL
+            <Globe size={16} />
+            <span>Direct URL</span>
           </button>
           <button
             onClick={() => setActiveTab('topic')}
-            className={`flex-1 py-4 text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+            className={`flex-1 py-3 text-sm font-medium rounded-xl flex items-center justify-center gap-2 transition-all duration-300 ${
               activeTab === 'topic'
-                ? 'bg-brand-50 text-brand-600 border-b-2 border-brand-600'
-                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'
+                ? 'bg-white dark:bg-white/10 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
-            <Sparkles size={18} />
-            Explore Topic
+            <Sparkles size={16} />
+            <span>Discover</span>
           </button>
         </div>
 
-        <div className="p-6 md:p-8">
+        <div className="p-6 md:p-10 min-h-[300px] flex flex-col justify-center">
           {activeTab === 'url' ? (
-            <form onSubmit={handleUrlSubmit} className="space-y-6">
+            <form onSubmit={handleUrlSubmit} className="space-y-8 max-w-2xl mx-auto w-full">
               <div className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-slate-400 group-focus-within:text-brand-500 transition-colors" />
-                </div>
                 <input
                   type="text"
                   value={inputUrl}
                   onChange={(e) => setInputUrl(e.target.value)}
-                  placeholder="https://example.com"
-                  className="block w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-lg"
+                  placeholder="Paste a website link here..."
+                  className="block w-full px-6 py-5 bg-white dark:bg-white/5 border-b-2 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 dark:focus:border-primary-400 transition-all text-xl md:text-2xl font-light text-center"
                   autoFocus
                 />
               </div>
 
               {error && (
-                <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 text-red-700 text-sm border border-red-100 animate-in slide-in-from-top-2">
-                  <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="font-semibold">Unable to process request</p>
-                    <p className="mt-1 opacity-90">{error}</p>
-                  </div>
+                <div className="flex items-center justify-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-3 px-4 rounded-lg animate-fade-up">
+                  <AlertCircle size={18} />
+                  <span className="text-sm font-medium">{error}</span>
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={isLoading || !inputUrl}
-                className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg shadow-brand-500/30 disabled:opacity-70 disabled:cursor-not-allowed hover:shadow-brand-500/40 active:transform active:scale-[0.98]"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="animate-spin h-5 w-5" />
-                    <span>Analyzing Content...</span>
-                  </>
-                ) : (
-                  <span>Start Exploring</span>
-                )}
-              </button>
+              <div className="flex justify-center">
+                <button
+                  type="submit"
+                  disabled={isLoading || !inputUrl}
+                  className="group relative inline-flex items-center justify-center gap-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-4 rounded-full font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 shadow-xl hover:shadow-2xl"
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="animate-spin h-5 w-5" />
+                      <span>Reading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Begin Analysis</span>
+                      <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 w-full">
               {!searchResults ? (
-                <form onSubmit={handleTopicSearch} className="space-y-6">
-                  <div className="relative group">
-                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                      <Sparkles className="h-5 w-5 text-brand-500" />
-                    </div>
+                <form onSubmit={handleTopicSearch} className="space-y-8 max-w-2xl mx-auto">
+                   <div className="relative group">
                     <input
                       type="text"
                       value={topic}
                       onChange={(e) => setTopic(e.target.value)}
-                      placeholder="e.g., Best Italian recipes, Space exploration news"
-                      className="block w-full pl-11 pr-4 py-4 bg-slate-50 border border-slate-200 rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all text-lg"
+                      placeholder="What do you want to learn about?"
+                      className="block w-full px-6 py-5 bg-white dark:bg-white/5 border-b-2 border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-primary-500 dark:focus:border-primary-400 transition-all text-xl md:text-2xl font-light text-center"
                       autoFocus
                     />
+                    <p className="text-center text-slate-400 text-sm mt-3">Try "History of Bauhaus", "Vegan Ramen Recipes", or "Latest AI News"</p>
                   </div>
 
                   {searchError && (
-                    <div className="flex items-start gap-3 p-4 rounded-lg bg-red-50 text-red-700 text-sm border border-red-100 animate-in slide-in-from-top-2">
-                      <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-semibold">Search Failed</p>
-                        <p className="mt-1 opacity-90">{searchError}</p>
-                      </div>
+                    <div className="flex items-center justify-center gap-2 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 py-3 px-4 rounded-lg animate-fade-up">
+                      <AlertCircle size={18} />
+                      <span className="text-sm font-medium">{searchError}</span>
                     </div>
                   )}
 
-                  <button
-                    type="submit"
-                    disabled={isSearchingTopic || !topic}
-                    className="w-full flex items-center justify-center gap-2 bg-brand-600 hover:bg-brand-700 text-white font-semibold py-4 px-6 rounded-xl transition-all shadow-lg shadow-brand-500/30 disabled:opacity-70 disabled:cursor-not-allowed hover:shadow-brand-500/40 active:transform active:scale-[0.98]"
-                  >
-                    {isSearchingTopic ? (
-                      <>
-                        <Loader2 className="animate-spin h-5 w-5" />
-                        <span>{loadingStatus}</span>
-                      </>
-                    ) : (
-                      <span>Find Websites</span>
-                    )}
-                  </button>
+                  <div className="flex justify-center">
+                    <button
+                      type="submit"
+                      disabled={isSearchingTopic || !topic}
+                      className="group relative inline-flex items-center justify-center gap-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-10 py-4 rounded-full font-medium transition-all hover:scale-105 active:scale-95 disabled:opacity-50 disabled:hover:scale-100 shadow-xl hover:shadow-2xl"
+                    >
+                      {isSearchingTopic ? (
+                        <>
+                          <Loader2 className="animate-spin h-5 w-5" />
+                          <span>{loadingStatus}</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Find Sources</span>
+                          <Sparkles className="w-5 h-5 group-hover:rotate-12 transition-transform" />
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </form>
               ) : (
-                <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-semibold text-slate-900">Results for "{topic}"</h3>
+                <div className="animate-fade-up w-full">
+                  <div className="flex items-center justify-between mb-6 px-2">
+                    <h3 className="font-serif text-2xl text-slate-900 dark:text-white">Curated Selection</h3>
                     <button 
                       onClick={resetSearch}
-                      className="text-sm text-brand-600 hover:text-brand-700 font-medium"
+                      className="text-sm text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors underline decoration-slate-300 underline-offset-4"
                     >
-                      Search Another Topic
+                      Clear Results
                     </button>
                   </div>
                   
-                  <div className="border border-slate-200 rounded-xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left text-sm">
-                        <thead className="bg-slate-50 border-b border-slate-200">
-                          <tr>
-                            <th className="px-6 py-3 font-semibold text-slate-700">Website</th>
-                            <th className="px-6 py-3 font-semibold text-slate-700">Description</th>
-                            <th className="px-6 py-3 font-semibold text-slate-700 text-right">Action</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {searchResults.map((site, index) => (
-                            <tr key={index} className="hover:bg-brand-50/50 transition-colors group">
-                              <td className="px-6 py-4 font-medium text-slate-900 w-1/4">
-                                <div className="flex flex-col">
-                                  <span>{site.title}</span>
-                                  <a href={site.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 hover:text-brand-600 flex items-center gap-1 mt-1">
-                                    {new URL(site.url).hostname} <ExternalLink size={10} />
-                                  </a>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 text-slate-600 w-1/2">
-                                {site.description}
-                              </td>
-                              <td className="px-6 py-4 text-right w-1/4">
-                                <button
-                                  onClick={() => onUrlSubmit(site.url)}
-                                  disabled={isLoading}
-                                  className="inline-flex items-center gap-1 bg-white border border-brand-200 text-brand-700 hover:bg-brand-600 hover:text-white px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm hover:shadow-md disabled:opacity-50"
-                                >
-                                  {isLoading ? <Loader2 className="animate-spin h-4 w-4" /> : 'Select'} <ArrowRight size={14} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                  
-                  {error && (
-                     <div className="mt-4 flex items-start gap-3 p-4 rounded-lg bg-red-50 text-red-700 text-sm border border-red-100 animate-in slide-in-from-top-2">
-                        <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {searchResults.map((site, index) => (
+                      <div 
+                        key={index} 
+                        className="group relative bg-white dark:bg-white/5 border border-slate-100 dark:border-white/10 hover:border-primary-200 dark:hover:border-primary-500/30 p-5 rounded-2xl transition-all hover:shadow-lg dark:hover:shadow-primary-900/20 cursor-pointer flex flex-col justify-between h-full"
+                        onClick={() => onUrlSubmit(site.url)}
+                      >
                         <div>
-                          <p className="font-semibold">Selection Failed</p>
-                          <p className="mt-1 opacity-90">{error}</p>
+                          <h4 className="font-serif text-lg text-slate-900 dark:text-gray-100 mb-2 line-clamp-1 group-hover:text-primary-600 dark:group-hover:text-primary-300 transition-colors">
+                            {site.title}
+                          </h4>
+                          <p className="text-sm text-slate-500 dark:text-slate-400 line-clamp-2 mb-4">
+                            {site.description}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-50 dark:border-white/5">
+                           <span className="text-xs font-mono text-slate-400 truncate max-w-[70%] flex items-center gap-1">
+                             {new URL(site.url).hostname}
+                           </span>
+                           <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-slate-50 dark:bg-white/10 text-slate-900 dark:text-white group-hover:bg-primary-600 group-hover:text-white dark:group-hover:bg-primary-500 transition-colors">
+                              {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
+                           </span>
                         </div>
                       </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

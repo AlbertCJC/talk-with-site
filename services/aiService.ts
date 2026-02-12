@@ -1,110 +1,102 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { ChatMessage, SearchResultItem } from "../types";
 
-// Initialize Gemini client with the API key from environment variables
+// Note: process.env.API_KEY is polyfilled by Vite. See vite.config.ts.
+if (!process.env.API_KEY) {
+  throw new Error("Google API Key is missing. Please set VITE_API_KEY in your .env file.");
+}
+
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const aiService = {
   /**
-   * Searches for websites related to a topic using Gemini with Google Search grounding.
+   * Searches for websites related to a topic using the Gemini API.
    */
   async searchWebsites(topic: string): Promise<SearchResultItem[]> {
     try {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Find 8 distinct, high-quality, and accessible websites related to the topic: "${topic}". 
-        Return a JSON array where each object has "title", "url" (must be a valid full http URL), and "description" (brief summary).`,
+        contents: `You are a helpful research assistant. Find 6-8 high-quality, distinct websites related to the user's topic: "${topic}".`,
         config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: 'application/json',
+          responseMimeType: "application/json",
           responseSchema: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                url: { type: Type.STRING },
-                description: { type: Type.STRING }
-              },
-              required: ['title', 'url', 'description']
-            }
-          }
+            type: Type.OBJECT,
+            properties: {
+              websites: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    title: { type: Type.STRING },
+                    url: { type: Type.STRING },
+                    description: { type: Type.STRING }
+                  },
+                  required: ["title", "url", "description"]
+                }
+              }
+            },
+            required: ["websites"]
+          },
+          temperature: 0.7
         }
       });
 
-      const text = response.text;
-      if (!text) return [];
+      const jsonStr = response.text.trim();
+      const parsed = JSON.parse(jsonStr);
+      return parsed.websites || [];
 
-      try {
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) return parsed;
-        // Handle potential wrapper object if model outputs { websites: [...] } - though schema suggests array
-        if ((parsed as any).websites && Array.isArray((parsed as any).websites)) return (parsed as any).websites;
-        return [];
-      } catch (e) {
-        console.error("JSON Parse error", e);
-        return [];
-      }
-    } catch (error: any) {
-      console.error("Search error", error);
-      throw new Error("Failed to search for websites. Please try again.");
+    } catch (error) {
+      console.error("Gemini Search Error:", error);
+      throw new Error("Failed to find sources. The AI may be unavailable or the topic too restrictive.");
     }
   },
 
   /**
-   * Generates a chat response based on the provided website context and message history.
+   * Generates a chat response based on the provided website context and message history using Gemini.
    */
   async getChatResponse(context: string, messages: ChatMessage[]): Promise<string> {
-    const systemInstruction = `You are a specialized website assistant. Your goal is to answer questions and discuss topics based *only* on the provided study materials. Do not use any external knowledge. If the answer is not in the materials, say "I can't find that information in the study materials." Be friendly and encouraging.
+    const truncatedContext = context.slice(0, 100000); 
+
+    const systemInstruction = `You are a specialized website assistant. Your goal is to answer questions and discuss topics based *only* on the provided study materials. Do not use any external knowledge. If the answer is not in the materials, say "I can't find that information in the provided text." Be friendly and concise.
 
 Here are the study materials:
 ---
-${context}
+${truncatedContext}
 ---
 `;
 
-    // The messages array passed here INCLUDES the latest user message (optimistic update).
-    // We separate it to use in sendMessage.
-    const historyMessages = messages.slice(0, -1);
-    const lastMessage = messages[messages.length - 1];
-
-    if (!lastMessage) return "";
-
-    // Map to Gemini history format
-    const history = historyMessages
-        .map(msg => ({
-            role: msg.role === 'model' ? 'model' : 'user',
-            parts: [{ text: msg.content }]
-        }))
-        // Filter out system messages if any (shouldn't be based on types, but safe to filter)
-        .filter(msg => msg.role === 'user' || msg.role === 'model');
-
-    // Gemini conversation history usually expects to start with a User message.
-    // The ChatInterface initializes with a Model greeting. We should remove it from the API history
-    // to prevent errors and potential confusion.
-    if (history.length > 0 && history[0].role === 'model') {
-        history.shift();
-    }
+    const history = messages
+      .filter(m => m.role === 'user' || m.role === 'model')
+      .map(m => ({
+        role: m.role,
+        parts: [{ text: m.content }]
+      }));
+    
+    // The last message in the history is the current user prompt.
+    const contents = history;
 
     try {
-      const chat = ai.chats.create({
+      const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
+        contents: contents,
         config: {
           systemInstruction: systemInstruction,
           temperature: 0.6,
-        },
-        history: history
+        }
       });
-
-      const result = await chat.sendMessage({
-        message: lastMessage.content
-      });
-
-      return result.text || "I couldn't generate a response.";
+      
+      const resultText = response.text;
+      
+      if (!resultText) {
+        throw new Error("Received an empty response from the Gemini API.");
+      }
+      
+      return resultText;
 
     } catch (error: any) {
       console.error("Gemini API Error:", error);
-      throw new Error("An error occurred while contacting the Gemini API.");
+      // Re-throw the original error to be handled by the UI component
+      throw error;
     }
   }
 };
